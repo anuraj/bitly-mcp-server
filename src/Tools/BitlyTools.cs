@@ -10,81 +10,110 @@ namespace BitlyMcpServer.Tools
     [McpServerToolType]
     public class BitlyTools
     {
-        [McpServerTool, Description("Shorten a long URL to bitly short URL")]
-        public static async Task<string?> Shorten(HttpClient client, [Description("The long URL to shorten")] string longUrl)
+        private static string GetApiKey()
         {
             var apiKey = Environment.GetEnvironmentVariable("BITLY_API_KEY");
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 throw new InvalidOperationException("The BITLY_API_KEY environment variable is not set.");
             }
+            return apiKey;
+        }
+
+        private static async Task<Dictionary<string, object>> SendRequest(HttpClient client, HttpRequestMessage request)
+        {
+            var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Request failed: {response.ReasonPhrase}");
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
+            if (result == null)
+            {
+                throw new InvalidOperationException("Failed to parse response from Bitly.");
+            }
+            return result;
+        }
+
+        [McpServerTool, Description("Shorten a long URL to bitly short URL")]
+        public static async Task<string?> CreateBitlink(HttpClient client, [Description("The long URL to shorten")] string longUrl)
+        {
+            var apiKey = GetApiKey();
             var request = new HttpRequestMessage(HttpMethod.Post, "v4/shorten")
             {
                 Content = new StringContent(JsonSerializer.Serialize(new { long_url = longUrl }), Encoding.UTF8, "application/json")
             };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            var response = await client.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException($"Failed to shorten URL: {response.ReasonPhrase}");
-            }
 
-            var content = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
-            return result == null ?
-                throw new InvalidOperationException("Failed to parse response from Bitly.") : result["link"].ToString();
+            var result = await SendRequest(client, request);
+            return result["link"].ToString();
+        }
+
+        [McpServerTool, Description("Delete a bitly short URL")]
+        public static async Task<string?> DeleteBitlink(HttpClient client, [Description("The short URL to delete")] string bitlink)
+        {
+            bitlink = bitlink.Replace("http://", "").Replace("https://", "");
+            var apiKey = GetApiKey();
+            var request = new HttpRequestMessage(HttpMethod.Delete, $"v4/bitlinks/{bitlink}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            var result = await SendRequest(client, request);
+            return result["link"].ToString();
+        }
+
+        [McpServerTool, Description("Update a bitly short URL")]
+        public static async Task<string?> UpdateBitlink(HttpClient client, [Description("The short URL to update")] string bitlink, [Description("The new title for the short URL")] string title)
+        {
+            bitlink = bitlink.Replace("http://", "").Replace("https://", "");
+            var apiKey = GetApiKey();
+            var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"v4/bitlinks/{bitlink}")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { title = title }), Encoding.UTF8, "application/json")
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            var result = await SendRequest(client, request);
+            return result["link"].ToString();
+        }
+
+        [McpServerTool, Description("Retrieve a bitly short URL by bitlink")]
+        public static async Task<string?> RetrieveByBitlink(HttpClient client, [Description("The short URL to retrieve")] string bitlink)
+        {
+            bitlink = bitlink.Replace("http://", "").Replace("https://", "");
+            var apiKey = GetApiKey();
+            var request = new HttpRequestMessage(HttpMethod.Get, $"v4/bitlinks/{bitlink}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            var result = await SendRequest(client, request);
+            return result.ToString();
         }
 
         [McpServerTool, Description("Expand a bitly short URL to long URL")]
-        public static async Task<string?> GetLongUrl(HttpClient client, [Description("The short URL to expand")] string bitlyUrl)
+        public static async Task<string?> GetLongUrlFromBitlink(HttpClient client, [Description("The short URL to expand")] string bitlink)
         {
-            //If shortUrl starts with http:// or https://, replace it with nothing
-            bitlyUrl = bitlyUrl.Replace("http://", "").Replace("https://", "");
+            bitlink = bitlink.Replace("http://", "").Replace("https://", "");
 
-            var apiKey = Environment.GetEnvironmentVariable("BITLY_API_KEY");
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                throw new InvalidOperationException("The BITLY_API_KEY environment variable is not set.");
-            }
+            var apiKey = GetApiKey();
             var request = new HttpRequestMessage(HttpMethod.Post, "v4/expand")
             {
-                Content = new StringContent(JsonSerializer.Serialize(new { bitlink_id = bitlyUrl }), Encoding.UTF8, "application/json")
+                Content = new StringContent(JsonSerializer.Serialize(new { bitlink_id = bitlink }), Encoding.UTF8, "application/json")
             };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            var response = await client.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException($"Failed to expand URL: {response.ReasonPhrase}");
-            }
 
-            var content = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
-            return result == null ?
-                throw new InvalidOperationException("Failed to parse response from Bitly.") : result["long_url"].ToString();
+            var result = await SendRequest(client, request);
+            return result["long_url"].ToString();
         }
 
-        [McpServerTool, Description("Get the click count for a bitly short URL")]
-        public static async Task<string?> GetClickCount(HttpClient client, [Description("The short URL to get the click count")] string bitlyUrl)
+        [McpServerTool, Description("Get the clicks count in month for a bitly short URL")]
+        public static async Task<string?> GetClickCountByMonth(HttpClient client, [Description("The short URL to get the click count")] string bitlink)
         {
-            bitlyUrl = bitlyUrl.Replace("http://", "").Replace("https://", "");
+            bitlink = bitlink.Replace("http://", "").Replace("https://", "");
 
-            var apiKey = Environment.GetEnvironmentVariable("BITLY_API_KEY");
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                throw new InvalidOperationException("The BITLY_API_KEY environment variable is not set.");
-            }
-            var request = new HttpRequestMessage(HttpMethod.Get, $"v4/bitlinks/{bitlyUrl}/clicks?unit=month&units=-1");
+            var apiKey = GetApiKey();
+            var request = new HttpRequestMessage(HttpMethod.Get, $"v4/bitlinks/{bitlink}/clicks?unit=month&units=-1");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            var response = await client.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException($"Failed to expand URL: {response.ReasonPhrase}");
-            }
 
-            var content = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
-            return result == null ?
-                throw new InvalidOperationException("Failed to parse response from Bitly.") : result["link_clicks"].ToString();
+            var result = await SendRequest(client, request);
+            return result["link_clicks"].ToString();
         }
     }
 }
