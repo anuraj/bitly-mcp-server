@@ -16,12 +16,6 @@ namespace BitlyMcpServer.Tools
             var apiKey = Environment.GetEnvironmentVariable("BITLY_API_KEY");
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                //Print all the environment variables for debugging
-                foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
-                {
-                    Console.WriteLine("  {0} = {1}", de.Key, de.Value);
-                }
-
                 throw new InvalidOperationException("The BITLY_API_KEY environment variable is not set.");
             }
             return apiKey;
