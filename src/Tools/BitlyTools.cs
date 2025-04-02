@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Mvc;
+
 using ModelContextProtocol.Server;
 
 using System.Collections;
@@ -11,17 +13,26 @@ namespace BitlyMcpServer.Tools
     [McpServerToolType]
     public class BitlyTools
     {
-        private static string GetApiKey()
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<BitlyTools> _logger;
+        public BitlyTools(IConfiguration configuration, ILogger<BitlyTools> logger)
         {
-            var apiKey = Environment.GetEnvironmentVariable("BITLY_API_KEY");
+            _configuration = configuration;
+            _logger = logger;
+        }
+        private string GetApiKey()
+        {
+            var apiKey = Environment.GetEnvironmentVariable("BITLY_API_KEY") ?? _configuration["BITLY_API_KEY"];
             if (string.IsNullOrWhiteSpace(apiKey))
             {
+                _logger.LogError("The BITLY_API_KEY environment variable or configuration setting is not set.");
                 throw new InvalidOperationException("The BITLY_API_KEY environment variable is not set.");
             }
+
             return apiKey;
         }
 
-        private static async Task<Dictionary<string, object>> SendRequest(HttpClient client, HttpRequestMessage request)
+        private async Task<Dictionary<string, object>> SendRequest(HttpClient client, HttpRequestMessage request)
         {
             var response = await client.SendAsync(request);
             if (!response.IsSuccessStatusCode)
@@ -39,7 +50,7 @@ namespace BitlyMcpServer.Tools
         }
 
         [McpServerTool, Description("Shorten a long URL to bitly short URL")]
-        public static async Task<string?> CreateBitlink(HttpClient client, [Description("The long URL to shorten")] string longUrl)
+        public async Task<string?> CreateBitlink([FromServices] HttpClient client, [Description("The long URL to shorten")] string longUrl)
         {
             var apiKey = GetApiKey();
             var request = new HttpRequestMessage(HttpMethod.Post, "v4/shorten")
@@ -53,7 +64,7 @@ namespace BitlyMcpServer.Tools
         }
 
         [McpServerTool, Description("Delete a bitly short URL")]
-        public static async Task<string?> DeleteBitlink(HttpClient client, [Description("The short URL to delete")] string bitlink)
+        public async Task<string?> DeleteBitlink([FromServices] HttpClient client, [Description("The short URL to delete")] string bitlink)
         {
             bitlink = bitlink.Replace("http://", "").Replace("https://", "");
             var apiKey = GetApiKey();
@@ -64,7 +75,7 @@ namespace BitlyMcpServer.Tools
         }
 
         [McpServerTool, Description("Update a bitly short URL")]
-        public static async Task<string?> UpdateBitlink(HttpClient client, [Description("The short URL to update")] string bitlink, [Description("The new title for the short URL")] string title)
+        public async Task<string?> UpdateBitlink([FromServices] HttpClient client, [Description("The short URL to update")] string bitlink, [Description("The new title for the short URL")] string title)
         {
             bitlink = bitlink.Replace("http://", "").Replace("https://", "");
             var apiKey = GetApiKey();
@@ -78,7 +89,7 @@ namespace BitlyMcpServer.Tools
         }
 
         [McpServerTool, Description("Retrieve a bitly short URL by bitlink")]
-        public static async Task<string?> RetrieveByBitlink(HttpClient client, [Description("The short URL to retrieve")] string bitlink)
+        public async Task<string?> RetrieveByBitlink([FromServices] HttpClient client, [Description("The short URL to retrieve")] string bitlink)
         {
             bitlink = bitlink.Replace("http://", "").Replace("https://", "");
             var apiKey = GetApiKey();
@@ -89,7 +100,7 @@ namespace BitlyMcpServer.Tools
         }
 
         [McpServerTool, Description("Expand a bitly short URL to long URL")]
-        public static async Task<string?> GetLongUrlFromBitlink(HttpClient client, [Description("The short URL to expand")] string bitlink)
+        public async Task<string?> GetLongUrlFromBitlink([FromServices] HttpClient client, [Description("The short URL to expand")] string bitlink)
         {
             bitlink = bitlink.Replace("http://", "").Replace("https://", "");
 
@@ -105,7 +116,7 @@ namespace BitlyMcpServer.Tools
         }
 
         [McpServerTool, Description("Get the clicks count in month for a bitly short URL")]
-        public static async Task<string?> GetClickCountByMonth(HttpClient client, [Description("The short URL to get the click count")] string bitlink)
+        public async Task<string?> GetClickCountByMonth([FromServices] HttpClient client, [Description("The short URL to get the click count")] string bitlink)
         {
             bitlink = bitlink.Replace("http://", "").Replace("https://", "");
 

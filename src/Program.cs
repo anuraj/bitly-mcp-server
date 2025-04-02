@@ -7,6 +7,13 @@ builder.Services
     .WithStdioServerTransport()
     .WithToolsFromAssembly();
 
+builder.Configuration.AddEnvironmentVariables();
+
+builder.Logging.AddConsole(options =>
+{
+    options.LogToStandardErrorThreshold = LogLevel.Trace;
+});
+
 builder.Services.AddSingleton(_ =>
 {
     var client = new HttpClient() { BaseAddress = new Uri("https://api-ssl.bitly.com/") };
